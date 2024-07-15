@@ -5,7 +5,7 @@ use std::sync::*;
 use std::time::*;
 use std::*;
 
-use fail::{fail_point, FailPointRegistry};
+use fail_parallel::{fail_point, FailPointRegistry};
 
 #[test]
 fn test_off() {
@@ -16,7 +16,7 @@ fn test_off() {
     };
     assert_eq!(f(), 0);
 
-    fail::cfg(registry.clone(), "off", "off").unwrap();
+    fail_parallel::cfg(registry.clone(), "off", "off").unwrap();
     assert_eq!(f(), 0);
 }
 
@@ -31,10 +31,10 @@ fn test_return() {
     };
     assert_eq!(f(), 0);
 
-    fail::cfg(registry.clone(), "return", "return(1000)").unwrap();
+    fail_parallel::cfg(registry.clone(), "return", "return(1000)").unwrap();
     assert_eq!(f(), 1000);
 
-    fail::cfg(registry.clone(), "return", "return").unwrap();
+    fail_parallel::cfg(registry.clone(), "return", "return").unwrap();
     assert_eq!(f(), 2);
 }
 
@@ -50,7 +50,7 @@ fn test_sleep() {
     assert!(timer.elapsed() < Duration::from_millis(1000));
 
     let timer = Instant::now();
-    fail::cfg(registry.clone(), "sleep", "sleep(1000)").unwrap();
+    fail_parallel::cfg(registry.clone(), "sleep", "sleep(1000)").unwrap();
     f();
     assert!(timer.elapsed() > Duration::from_millis(1000));
 }
@@ -63,7 +63,7 @@ fn test_panic() {
     let f = || {
         fail_point!(registry.clone(), "panic");
     };
-    fail::cfg(registry.clone(), "panic", "panic(msg)").unwrap();
+    fail_parallel::cfg(registry.clone(), "panic", "panic(msg)").unwrap();
     f();
 }
 
@@ -91,12 +91,12 @@ fn test_print() {
     let f = || {
         fail_point!(registry.clone(), "print");
     };
-    fail::cfg(registry.clone(), "print", "print(msg)").unwrap();
+    fail_parallel::cfg(registry.clone(), "print", "print(msg)").unwrap();
     f();
     let msg = buffer.lock().unwrap().pop().unwrap();
     assert_eq!(msg, "msg");
 
-    fail::cfg(registry.clone(), "print", "print").unwrap();
+    fail_parallel::cfg(registry.clone(), "print", "print").unwrap();
     f();
     let msg = buffer.lock().unwrap().pop().unwrap();
     assert_eq!(msg, "failpoint print executed.");
@@ -112,7 +112,7 @@ fn test_pause() {
     };
     f();
 
-    fail::cfg(registry.clone(), "pause", "pause").unwrap();
+    fail_parallel::cfg(registry.clone(), "pause", "pause").unwrap();
     let (tx, rx) = mpsc::channel();
     thread::spawn(move || {
         // pause
@@ -127,11 +127,11 @@ fn test_pause() {
     });
 
     assert!(rx.recv_timeout(Duration::from_millis(500)).is_err());
-    fail::cfg(registry.clone(), "pause", "pause").unwrap();
+    fail_parallel::cfg(registry.clone(), "pause", "pause").unwrap();
     rx.recv_timeout(Duration::from_millis(500)).unwrap();
 
     assert!(rx.recv_timeout(Duration::from_millis(500)).is_err());
-    fail::remove(registry.clone(), "pause");
+    fail_parallel::remove(registry.clone(), "pause");
     rx.recv_timeout(Duration::from_millis(500)).unwrap();
 
     rx.recv_timeout(Duration::from_millis(500)).unwrap();
@@ -143,7 +143,7 @@ fn test_yield() {
     let f = || {
         fail_point!(registry.clone(), "yield");
     };
-    fail::cfg(registry.clone(), "test", "yield").unwrap();
+    fail_parallel::cfg(registry.clone(), "test", "yield").unwrap();
     f();
 }
 
@@ -160,7 +160,7 @@ fn test_callback() {
 
     let counter = Arc::new(AtomicUsize::new(0));
     let counter2 = counter.clone();
-    fail::cfg_callback(registry.clone(), "cb", move || {
+    fail_parallel::cfg_callback(registry.clone(), "cb", move || {
         counter2.fetch_add(1, Ordering::SeqCst);
     })
     .unwrap();
@@ -175,7 +175,7 @@ fn test_delay() {
     let registry = Arc::new(FailPointRegistry::new());
     let f = || fail_point!(registry.clone(), "delay");
     let timer = Instant::now();
-    fail::cfg(registry.clone(), "delay", "delay(1000)").unwrap();
+    fail_parallel::cfg(registry.clone(), "delay", "delay(1000)").unwrap();
     f();
     assert!(timer.elapsed() > Duration::from_millis(1000));
 }
@@ -189,7 +189,7 @@ fn test_freq_and_count() {
             .map_or(2, |s| s.parse().unwrap()));
         0
     };
-    fail::cfg(
+    fail_parallel::cfg(
         registry.clone(),
         "freq_and_count",
         "50%50*return(1)->50%50*return(-1)->50*return",
@@ -213,7 +213,7 @@ fn test_condition() {
     };
     assert_eq!(f(false), 0);
 
-    fail::cfg(registry.clone(), "condition", "return").unwrap();
+    fail_parallel::cfg(registry.clone(), "condition", "return").unwrap();
     assert_eq!(f(false), 0);
 
     assert_eq!(f(true), 2);
@@ -222,9 +222,9 @@ fn test_condition() {
 #[test]
 fn test_list() {
     let registry = Arc::new(FailPointRegistry::new());
-    assert!(!fail::list(registry.clone()).contains(&("list".to_string(), "off".to_string())));
-    fail::cfg(registry.clone(), "list", "off").unwrap();
-    assert!(fail::list(registry.clone()).contains(&("list".to_string(), "off".to_string())));
-    fail::cfg(registry.clone(), "list", "return").unwrap();
-    assert!(fail::list(registry.clone()).contains(&("list".to_string(), "return".to_string())));
+    assert!(!fail_parallel::list(registry.clone()).contains(&("list".to_string(), "off".to_string())));
+    fail_parallel::cfg(registry.clone(), "list", "off").unwrap();
+    assert!(fail_parallel::list(registry.clone()).contains(&("list".to_string(), "off".to_string())));
+    fail_parallel::cfg(registry.clone(), "list", "return").unwrap();
+    assert!(fail_parallel::list(registry.clone()).contains(&("list".to_string(), "return".to_string())));
 }

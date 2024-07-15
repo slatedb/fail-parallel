@@ -2,7 +2,7 @@
 
 use std::*;
 
-use fail::FailPointRegistry;
+use fail_parallel::{fail_point, FailPointRegistry};
 use sync::Arc;
 
 #[test]
@@ -10,15 +10,15 @@ use sync::Arc;
 fn test_return() {
     let registry = Arc::new(FailPointRegistry::new());
     let f = || {
-        fail::fail_point!(registry.clone(), "return", |s: Option<String>| s
+        fail_point!(registry.clone(), "return", |s: Option<String>| s
             .map_or(2, |s| s.parse().unwrap()));
         0
     };
     assert_eq!(f(), 0);
 
-    fail::cfg(registry.clone(), "return", "return(1000)").unwrap();
+    fail_parallel::cfg(registry.clone(), "return", "return(1000)").unwrap();
     assert_eq!(f(), 1000);
 
-    fail::cfg(registry.clone(), "return", "return").unwrap();
+    fail_parallel::cfg(registry.clone(), "return", "return").unwrap();
     assert_eq!(f(), 2);
 }
