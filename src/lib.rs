@@ -708,20 +708,25 @@ pub fn list(fp_registry: Arc<FailPointRegistry>) -> Vec<(String, String)> {
         .collect()
 }
 
+fn find_fail_point(
+    fp_registry: Arc<FailPointRegistry>,
+    name: &str,
+) -> Option<Arc<FailPoint>> {
+    let registry = fp_registry.registry.read().unwrap();
+    registry.get(name).map(|p| p.clone())
+}
+
 #[doc(hidden)]
 pub fn eval<R, F: FnOnce(Option<String>) -> R>(
     fp_registry: Arc<FailPointRegistry>,
     name: &str,
     f: F,
 ) -> Option<R> {
-    let p = {
-        let registry = fp_registry.registry.read().unwrap();
-        match registry.get(name) {
-            None => return None,
-            Some(p) => p.clone(),
-        }
-    };
-    p.eval(name).map(f)
+    if let Some(p) = find_fail_point(fp_registry, name) {
+        p.eval(name).map(f)
+    } else {
+        None
+    }
 }
 
 #[doc(hidden)]
@@ -730,14 +735,11 @@ pub async fn eval_async<R, F: FnOnce(Option<String>) -> R>(
     name: &str,
     f: F,
 ) -> Option<R> {
-    let p = {
-        let registry = fp_registry.registry.read().unwrap();
-        match registry.get(name) {
-            None => return None,
-            Some(p) => p.clone()
-        }
-    };
-    p.eval_async(name).await.map(f)
+    if let Some(p) = find_fail_point(fp_registry, name) {
+        p.eval_async(name).await.map(f)
+    } else {
+        None
+    }
 }
 
 /// Configure the actions for a fail point at runtime.
