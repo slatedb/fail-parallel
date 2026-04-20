@@ -318,7 +318,7 @@ impl Action {
                 return None;
             }
         }
-        if self.freq < 1f32 && !rand::thread_rng().gen_bool(f64::from(self.freq)) {
+        if self.freq < 1f32 && !rand::rng().gen_bool(f64::from(self.freq)) {
             return None;
         }
         if let Some(ref ref_cnt) = self.count {
