@@ -1,6 +1,6 @@
 [package]
 name = "fail-parallel"
-version = "0.5.1"
+version = "0.6.0"
 authors = ["The SlateDB Project Developers"]
 license = "Apache-2.0"
 keywords = ["failpoints", "fail"]
