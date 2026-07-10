@@ -600,6 +600,51 @@ impl FailPointRegistry {
     }
 }
 
+/// A failpoint registry and event sender used by [`fail_point_send!`].
+#[derive(Clone, Debug)]
+pub struct FailPointTx {
+    fp_registry: Arc<FailPointRegistry>,
+    event_tx: tokio::sync::mpsc::UnboundedSender<String>,
+}
+
+impl FailPointTx {
+    /// Creates a handle backed by an empty registry and a disconnected event channel.
+    pub fn dummy() -> Self {
+        let (event_tx, _) = tokio::sync::mpsc::unbounded_channel();
+        Self {
+            fp_registry: Arc::new(FailPointRegistry::new()),
+            event_tx,
+        }
+    }
+
+    #[doc(hidden)]
+    pub fn registry(&self) -> Arc<FailPointRegistry> {
+        self.fp_registry.clone()
+    }
+
+    #[doc(hidden)]
+    pub fn send(&self, event: String) {
+        let _ = self.event_tx.send(event);
+    }
+}
+
+/// Creates a failpoint event channel associated with `fp_registry`.
+///
+/// The returned [`FailPointTx`] can be passed to [`fail_point_send!`]. The
+/// receiver yields the name of each failpoint reached through that macro.
+pub fn fail_point_channel(
+    fp_registry: Arc<FailPointRegistry>,
+) -> (FailPointTx, tokio::sync::mpsc::UnboundedReceiver<String>) {
+    let (event_tx, event_rx) = tokio::sync::mpsc::unbounded_channel();
+    (
+        FailPointTx {
+            fp_registry,
+            event_tx,
+        },
+        event_rx,
+    )
+}
+
 /// Test scenario with configured fail points.
 #[derive(Debug)]
 pub struct FailScenario {
@@ -1053,6 +1098,28 @@ macro_rules! fail_point {
     ($registry:expr, $name:expr, $e:expr) => {{}};
     ($registry:expr, $name:expr) => {{}};
     ($registry:expr, $name:expr, $cond:expr, $e:expr) => {{}};
+}
+
+/// Emit an event and evaluate a failpoint (requires the `failpoints` feature).
+///
+/// The first argument must be a [`FailPointTx`], the second is the failpoint
+/// name, and the third is an early-return closure accepted by [`fail_point!`].
+#[macro_export]
+#[cfg(feature = "failpoints")]
+macro_rules! fail_point_send {
+    ($fp_tx:expr, $name:expr, $e:expr) => {{
+        let fp_tx = &$fp_tx;
+        let name = $name.to_string();
+        fp_tx.send(name.clone());
+        $crate::fail_point!(fp_tx.registry(), name.as_str(), $e);
+    }};
+}
+
+/// Emit an event and evaluate a failpoint (disabled without the `failpoints` feature).
+#[macro_export]
+#[cfg(not(feature = "failpoints"))]
+macro_rules! fail_point_send {
+    ($fp_tx:expr, $name:expr, $e:expr) => {{}};
 }
 
 #[cfg(test)]

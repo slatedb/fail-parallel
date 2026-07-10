@@ -7,6 +7,45 @@ use std::*;
 
 use fail_parallel::{fail_point, FailPointRegistry};
 
+#[cfg(feature = "failpoints")]
+use fail_parallel::{fail_point_channel, fail_point_send, FailPointTx};
+
+#[cfg(feature = "failpoints")]
+fn fail_point_send_result(fp_tx: &FailPointTx) -> Result<(), String> {
+    fail_point_send!(fp_tx, "fail-point-send-return", |arg| {
+        Err(arg.expect("configured failpoint should include a value"))
+    });
+    Ok(())
+}
+
+#[test]
+#[cfg(feature = "failpoints")]
+fn test_fail_point_send_propagates_failpoints() {
+    let registry = Arc::new(FailPointRegistry::new());
+    let (fp_tx, _) = fail_point_channel(registry.clone());
+    fail_parallel::cfg(registry, "fail-point-send-return", "return(propagated)").unwrap();
+
+    assert_eq!(
+        fail_point_send_result(&fp_tx),
+        Err("propagated".to_string())
+    );
+}
+
+#[test]
+#[cfg(feature = "failpoints")]
+fn test_fail_point_send_sends_events() {
+    let registry = Arc::new(FailPointRegistry::new());
+    let (fp_tx, mut event_rx) = fail_point_channel(registry);
+
+    fail_point_send!(fp_tx, "fail-point-send-event", |_| {});
+
+    assert_eq!(
+        event_rx.try_recv().unwrap(),
+        "fail-point-send-event".to_string()
+    );
+    assert!(event_rx.try_recv().is_err());
+}
+
 #[test]
 fn test_off() {
     let registry = Arc::new(FailPointRegistry::new());
