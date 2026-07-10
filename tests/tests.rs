@@ -5,10 +5,10 @@ use std::sync::*;
 use std::time::*;
 use std::*;
 
-use fail_parallel::{fail_point, FailPointRegistry};
+use fail_parallel::{fail_point, fail_point_send, FailPointRegistry};
 
 #[cfg(feature = "failpoints")]
-use fail_parallel::{fail_point_channel, fail_point_send, FailPointTx};
+use fail_parallel::{fail_point_channel, FailPointTx};
 
 #[cfg(feature = "failpoints")]
 fn fail_point_send_result(fp_tx: &FailPointTx) -> Result<(), String> {
@@ -44,6 +44,37 @@ fn test_fail_point_send_sends_events() {
         "fail-point-send-event".to_string()
     );
     assert!(event_rx.try_recv().is_err());
+}
+
+#[test]
+#[cfg(feature = "failpoints")]
+fn test_fail_point_send_without_return_expression() {
+    let registry = Arc::new(FailPointRegistry::new());
+    let (fp_tx, mut event_rx) = fail_point_channel(registry.clone());
+    let calls = Arc::new(AtomicUsize::new(0));
+    let callback_calls = calls.clone();
+    fail_parallel::cfg_callback(registry, "fail-point-send-no-return", move || {
+        callback_calls.fetch_add(1, Ordering::SeqCst);
+    })
+    .unwrap();
+
+    fail_point_send!(fp_tx, "fail-point-send-no-return");
+
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+    assert_eq!(
+        event_rx.try_recv().unwrap(),
+        "fail-point-send-no-return".to_string()
+    );
+}
+
+#[test]
+#[cfg(not(feature = "failpoints"))]
+fn test_fail_point_send_without_return_expression_is_disabled() {
+    let evaluated = std::cell::Cell::new(false);
+
+    fail_point_send!(evaluated.set(true), evaluated.set(true));
+
+    assert!(!evaluated.get());
 }
 
 #[test]
@@ -261,9 +292,15 @@ fn test_condition() {
 #[test]
 fn test_list() {
     let registry = Arc::new(FailPointRegistry::new());
-    assert!(!fail_parallel::list(registry.clone()).contains(&("list".to_string(), "off".to_string())));
+    assert!(
+        !fail_parallel::list(registry.clone()).contains(&("list".to_string(), "off".to_string()))
+    );
     fail_parallel::cfg(registry.clone(), "list", "off").unwrap();
-    assert!(fail_parallel::list(registry.clone()).contains(&("list".to_string(), "off".to_string())));
+    assert!(
+        fail_parallel::list(registry.clone()).contains(&("list".to_string(), "off".to_string()))
+    );
     fail_parallel::cfg(registry.clone(), "list", "return").unwrap();
-    assert!(fail_parallel::list(registry.clone()).contains(&("list".to_string(), "return".to_string())));
+    assert!(
+        fail_parallel::list(registry.clone()).contains(&("list".to_string(), "return".to_string()))
+    );
 }
